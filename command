@@ -216,5 +216,92 @@ EOF
   330  cd ~/r3n-phone
   331  ls -lh images/rootfs.img
   332  ls -lh kernel/vmlinuz-6.12.101+deb13-arm64
+sudo dpkg --add-architecture arm64 && sudo apt-get update -y
+apt-get download busybox-static:arm64
+   mkdir -p /home/zenr3n/r3n-phone/tmp && cd /home/zenr3n/r3n-phone/tmp && apt-get download busybox-static:arm64
+   cd /home/zenr3n/r3n-phone/tmp && ar x busybox-static_*.deb && tar -xf data.tar.xz -C .
+   file /home/zenr3n/r3n-phone/tmp/bin/busybox
+   ls -R /home/zenr3n/r3n-phone/tmp | head -n 40
+● Bash(cp /home/zenr3n/r3n-phone/tmp/usr/bin/busybox /home/zenr3n/r3n-phone/initramfs/bin/) (ctrl+o to expand)
+   cp /home/zenr3n/r3n-phone/tmp/usr/bin/busybox /home/zenr3n/r3n-phone/initramfs/bin/
+● Bash(mkdir -p /home/zenr3n/r3n-phone/initramfs && rm -rf /home/zenr3n/r3n-phone/initramfs/
+   for app in sh mount umount pivot_root switch_root; do ln -s busybox /home/zenr3n/r3n-phone/initramfs/bin/$app; done
 
 
+
+## 6⃣ Create the init script (the first program the kernel runs)
+
+    cat > /home/zenr3n/r3n-phone/initramfs/init <<'EOF'
+    #!/bin/busybox sh
+    # Minimal init for the r3n‑phone image
+    
+    # mount the essential pseudo‑filesystems
+    mount -t proc  proc  /proc
+    mount -t sysfs sys   /sys
+    mount -t devtmpfs dev  /dev
+    
+    # wait for the virtio block device that QEMU presents as /dev/vda
+    while [ ! -b /dev/vda ]; do
+        sleep 1
+    done
+    
+    # mount the real root read‑only first; we will switch to rw after pivot
+    mount -t ext4 -o ro /dev/vda /newroot
+    
+    # hand over to the real rootfs
+    exec switch_root /newroot /sbin/init
+    EOF
+  Make it executable:
+    chmod +x /home/zenr3n/r3n-phone/initramfs/init
+  ──────
+  ## 7⃣ Pack the initramfs (cpio + gzip)
+    cd /home/zenr3n/r3n-phone/initramfs
+    # create a newc CPIO archive and gzip it – exactly what the kernel expects
+    find . | cpio -H newc -o | gzip -9 > /home/zenr3n/r3n-phone/kernel/initrd-r3n-arm64.img
+
+  The resulting file should be only a few kilobytes (≈ 10 KB).
+  ──────
+  ## 8⃣ Verify the archive before booting
+
+  ### 8.1 List its contents
+    gzip -dc /home/zenr3n/r3n-phone/kernel/initrd-r3n-arm64.img | cpio -t --format=newc
+  You should see at least:
+
+    ./
+    ./bin/
+    ./bin/busybox
+    ./bin/sh
+    ./bin/mount
+    ./bin/umount
+    ./bin/pivot_root
+    ./bin/switch_root
+    ./init
+    ./dev/
+    ./proc/
+    ./sys/
+    ./newroot/
+  ### 8.2 Confirm the BusyBox binary is ARM64
+
+    gzip -dc /home/zenr3n/r3n-phone/kernel/initrd-r3n-arm64.img | \
+      cpio -i --to-stdout ./bin/busybox | file -
+  Expected output (the exact version may differ but must contain ARM aarch64):
+
+    /dev/stdin: ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically linked, stripped
+
+  If any entry shows a different architecture or is missing, stop and let me know.
+  ──────
+  ## 9⃣ Final QEMU command (all absolute paths)
+    /home/zenr3n/r3n-phone/qemu-system-aarch64 \
+      -machine virt \
+      -cpu cortex-a76 \
+      -smp 4 \
+      -m 4096 \
+      -kernel /home/zenr3n/r3n-phone/kernel/vmlinuz-6.12.101+deb13-arm64 \
+      -initrd /home/zenr3n/r3n-phone/kernel/initrd-r3n-arm64.img \
+      -append "root=/dev/vda rw console=ttyAMA0" \
+      -drive file=/home/zenr3n/r3n-phone/images/rootfs.img,format=raw,if=virtio \
+      -nographic
+
+  • root=/dev/vda points the kernel to the virtio disk you already provide.
+  • The initramfs will mount that disk at /newroot, then switch_root to it and finally run /sbin/init from the
+  already‑validated ARM64 rootfs.
