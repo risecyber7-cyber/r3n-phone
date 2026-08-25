@@ -1,0 +1,175 @@
+I'm building a custom ARM64 Linux phone/rootfs image called r3n-phone and trying to boot it with QEMU.
+
+My setup:
+- Host: Linux x86_64
+- Target: ARM64 / AArch64
+- QEMU: qemu-system-aarch64
+- Machine: virt
+- CPU: cortex-a76
+- RAM: 4096 MB
+- CPUs: 4
+- Kernel: 6.12.101+deb13-arm64
+- Rootfs: images/rootfs.img
+- Rootfs size: 8.0G
+- Rootfs filesystem: ext4
+- Rootfs is confirmed ARM64
+
+Important rootfs checks:
+
+file /mnt/lib/systemd/systemd
+=> ELF 64-bit LSB pie executable, ARM aarch64, dynamically linked
+
+file /mnt/usr/bin/dash
+=> ELF 64-bit LSB pie executable, ARM aarch64, dynamically linked
+
+file /mnt/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1
+=> ELF 64-bit shared object, ARM aarch64
+
+/mnt/lib/ld-linux-aarch64.so.1
+=> symlink to aarch64-linux-gnu/ld-linux-aarch64.so.1
+
+Rootfs mounts correctly:
+
+findmnt /mnt
+=> /mnt /dev/loop0 ext4 rw,relatime
+
+blkid /dev/loop0
+=> TYPE="ext4"
+
+The rootfs therefore appears to be valid ARM64.
+
+Original QEMU boot command:
+
+qemu-system-aarch64 \
+  -machine virt \
+  -cpu cortex-a76 \
+  -smp 4 \
+  -m 4096 \
+  -kernel kernel/vmlinuz-6.12.101+deb13-arm64 \
+  -initrd kernel/initrd.img \
+  -append "root=/dev/vda rw console=ttyAMA0" \
+  -drive file=images/rootfs.img,format=raw,if=virtio \
+  -nographic
+
+The ARM64 kernel boots successfully and detects the virtio disk.
+
+However, boot eventually fails with:
+
+Failed to execute /init (error -8)
+
+Then:
+
+Run /sbin/init as init process
+
+Starting init: /sbin/init exists but couldn't execute it (error -8)
+
+Then:
+
+Starting init: /bin/sh exists but couldn't execute it (error -8)
+
+Finally:
+
+Kernel panic - not syncing: No working init found.
+
+There were also repeated messages:
+
+request_module: modprobe binfmt-464c cannot be processed, kmod busy with 50 threads for more than 5 seconds now
+
+This strongly suggests an executable-format/initrd problem rather than the rootfs itself.
+
+I then tried to create a custom initrd.
+
+The first mistake was creating an initrd containing only:
+
+.
+init
+
+The resulting image was only about 502 bytes.
+
+The init script was:
+
+#!/bin/busybox sh
+
+...
+
+But there was no actual /bin/busybox binary.
+
+I then tried to create a symlink:
+
+/bin/busybox -> ../usr/bin/busybox
+
+but /usr/bin/busybox does NOT exist.
+
+The resulting initrd was about 551 bytes and contained:
+
+init
+bin/busybox -> ../usr/bin/busybox
+
+but no actual BusyBox executable.
+
+Checking it showed:
+
+file usr/bin/busybox
+=> No such file or directory
+
+So that initrd is definitely broken.
+
+I also tried extracting:
+
+/boot/initrd.img-6.12.101+deb13-arm64
+
+I initially used zcat, but it failed:
+
+gzip: /boot/initrd.img-6.12.101+deb13-arm64: not in gzip format
+
+file /boot/initrd.img-6.12.101+deb13-arm64
+=> ASCII cpio archive (SVR4 with no CRC)
+
+Size:
+=> 105M
+
+But inspecting it revealed:
+
+.
+kernel
+kernel/x86
+kernel/x86/microcode
+kernel/x86/microcode/AuthenticAMD.bin
+
+So this /boot/initrd.img file appears to be an x86-oriented initrd and is NOT the correct ARM64 initrd for this project. Do not assume it is the right initrd just because its filename contains 6.12.101+deb13-arm64.
+
+Current files:
+
+~/r3n-phone/images/rootfs.img
+=> 8.0G
+
+~/r3n-phone/kernel/vmlinuz-6.12.101+deb13-arm64
+=> 36M
+
+~/r3n-phone/kernel/initrd-r3n-arm64.img
+=> currently only ~551 bytes and is broken.
+
+My goals:
+
+1. Determine exactly why the original ARM64 kernel cannot execute /init and gives error -8.
+2. Explain the meaning of error -8 in this context.
+3. Determine why binfmt-464c/modprobe messages are appearing.
+4. Build a VALID ARM64 initramfs from scratch or from the correct ARM64 packages.
+5. The initramfs must contain an actual ARM64 BusyBox (or another valid ARM64 shell/init implementation), not just a symlink.
+6. The initramfs must:
+   - mount /dev
+   - mount /proc
+   - mount /sys
+   - detect /dev/vda
+   - mount /dev/vda as ext4 at /newroot
+   - switch_root to /newroot
+   - execute /sbin/init from the ARM64 rootfs
+7. Do NOT modify or rebuild the rootfs unless there is evidence that the rootfs itself is broken.
+8. Do NOT use the x86 initrd found at /boot/initrd.img-6.12.101+deb13-arm64.
+9. Give me exact commands, one step at a time.
+10. Before building anything, tell me how to obtain a genuine ARM64 BusyBox binary and verify it with `file`.
+11. Make sure every executable placed in the initramfs is ARM64/AArch64.
+12. Explain how to verify the final initramfs contents before booting.
+13. Give me the final QEMU command using absolute paths if necessary so directory mistakes cannot occur.
+
+Please focus on diagnosing the initrd/init execution problem first. Do not randomly change kernel parameters or rebuild the rootfs without evidence.
