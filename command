@@ -119,4 +119,102 @@ EOF
   230  file /mnt/sbin/init
   231  file /mnt/lib/systemd/systemd 2>/dev/null
   232  sudo ls -lh /mnt/
+236  clear
+  237  file /mnt/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1
+  238  ls -l /mnt/lib/ld-linux-aarch64.so.1
+  239  ls -l /mnt/usr/lib/systemd/systemd
+  240  file /mnt/usr/bin/dash
+  241  ls -l /mnt/usr/lib/aarch64-linux-gnu/ | head
+  242  findmnt /mnt
+  243  sudo blkid /dev/loop0
+  244  sudo update-initramfs -c -k 6.12.101+deb13-arm64
+  245  lsinitramfs kernel/initrd.img | head -50
+  246  lsinitramfs kernel/initrd.img | grep -E '(^|/)(init|systemd|busybox|modprobe)$' | head -30
+  247  ls -lh kernel/initrd.img
+  248  file kernel/initrd.img
+  249  ls -lh /boot/initrd.img-6.12.101+deb13-arm64
+  250  clean
+  251  cleaN
+  252  clean
+  253  clear
+  254  sudo umount /mnt
+  255  sudo losetup -d /dev/loop0
+  256  sudo cp /boot/initrd.img-6.12.101+deb13-arm64 kernel/initrd.img
+  257  sudo chown zenr3n:zenr3n kernel/initrd.img
+  258  ls -lh kernel/initrd.img
+  259  lsinitramfs kernel/initrd.img | grep 'x86_64-linux-gnu/systemd'
+  260  lsinitramfs kernel/initrd.img | grep -E 'usr/lib/(aarch64-linux-gnu|arm64-linux-gnu)/systemd|usr/lib/systemd'
+  261  lsinitramfs kernel/initrd.img | head -30
+  262  mkdir -p /tmp/r3n-initrd
+  263  cd /tmp/r3n-initrd
+  264  zcat ~/r3n-phone/kernel/initrd.img 2>/dev/null | cpio -it 2>/dev/null | grep '^init$'
+  265  lsinitramfs ~/r3n-phone/kernel/initrd.img | grep '^init$'
+  266  cd ~/r3n-phone
+  267  qemu-system-aarch64   -machine virt   -cpu cortex-a76   -smp 4   -m 4096   -kernel kernel/vmlinuz-6.12.101+deb13-arm64   -initrd kernel/initrd.img   -append "root=/dev/vda rw console=ttyAMA0"   -drive file=images/rootfs.img,format=raw,if=virtio   -nographic
+  268  cd ~/r3n-phone
+  269  mkdir -p /tmp/check-initrd
+  270  cd /tmp/check-initrd
+  271  zcat ~/r3n-phone/kernel/initrd.img 2>/dev/null | cpio -idmu 2>/dev/null ||   cpio -idmu < ~/r3n-phone/kernel/initrd.img
+  272  file init
+  273  file usr/bin/busybox 2>/dev/null
+  274  file usr/sbin/init 2>/dev/null
+  275  file usr/lib/x86_64-linux-gnu/systemd 2>/dev/null
+  276  file usr/lib/aarch64-linux-gnu/systemd 2>/dev/null
+  277  cd ~/r3n-phone
+  278  sudo umount /mnt 2>/dev/null || true
+  279  sudo mount /dev/loop0 /mnt
+  280  cd ~/r3n-phone
+  281  rm -rf /tmp/r3n-initrd
+  282  mkdir -p /tmp/r3n-initrd
+  283  sudo cp /mnt/usr/bin/busybox bin/busybox
+  284  sudo chmod +x bin/busybox
+  285  sudo nano /tmp/r3n-initrd/init
+  286  /tmp/r3n-initrd/bin/busybox switch_root --help
+  287  cd /tmp/r3n-initrd
+  288  sudo find . -print0 | sudo cpio --null -o -H newc | gzip -9 > ~/r3n-phone/kernel/initrd-r3n-arm64.img
+  289  ls -lh ~/r3n-phone/kernel/initrd-r3n-arm64.img
+  290  mkdir -p /tmp/check-new-initrd
+  291  cd /tmp/check-new-initrd
+  292  zcat ~/r3n-phone/kernel/initrd-r3n-arm64.img | cpio -it | head -30
+  293  rm -rf /tmp/check-new-initrd/*
+  294  zcat ~/r3n-phone/kernel/initrd-r3n-arm64.img | cpio -idmu\
+  295  file init
+  296  file bin/busybox
+  297  rm -rf /tmp/r3n-initrd
+  298  mkdir -p /tmp/r3n-initrd
+  299  /boot/initrd.img-6.12.101+deb13-arm64
+  300  cd /tmp/r3n-initrd
+  301  sudo sh -c 'zcat /boot/initrd.img-6.12.101+deb13-arm64 | cpio -idm'
+  302  ls -lh usr/bin/busybox
+  303  file usr/bin/busybox
+  304  find usr -name busybox -type f -ls
+  305  sudo mkdir -p /tmp/r3n-initrd/bin
+  306  sudo ln -sf ../usr/bin/busybox /tmp/r3n-initrd/bin/busybox
+  307  ls -l /tmp/r3n-initrd/bin/busybox
+  308  file /tmp/r3n-initrd/usr/bin/busybox
+  309  sudo nano /tmp/r3n-initrd/init
+  310  sudo chmod +x /tmp/r3n-initrd/init
+  311  ls -l /tmp/r3n-initrd/init
+  312  ls -l /tmp/r3n-initrd/bin/busybox
+  313  ls -l /tmp/r3n-initrd/usr/bin/busybox
+  314  file /tmp/r3n-initrd/usr/bin/busybox
+  315  cd /tmp/r3n-initrd
+  316  sudo find . -print0 | sudo cpio --null -o -H newc | gzip -9 > ~/r3n-phone/kernel/initrd-r3n-arm64.img
+  317  ls -lh ~/r3n-phone/kernel/initrd-r3n-arm64.img
+  318  zcat ~/r3n-phone/kernel/initrd-r3n-arm64.img | cpio -it | grep -E '(^|/)(init|busybox)$' | head
+  319  mkdir -p /tmp/check-new-initrd
+  320  cd /tmp/check-new-initrd
+  321  zcat ~/r3n-phone/kernel/initrd-r3n-arm64.img | cpio -idmu
+  322  file init
+  323  file usr/bin/busybox
+  324  ls -l bin/busybox
+  325  qemu-system-aarch64   -machine virt   -cpu cortex-a76   -smp 4   -m 4096   -kernel kernel/vmlinuz-6.12.101+deb13-arm64   -initrd kernel/initrd-r3n-arm64.img   -append "root=/dev/vda rw console=ttyAMA0"   -drive file=images/rootfs.img,format=raw,if=virtio   -nographic
+  326  file /boot/initrd.img-6.12.101+deb13-arm64
+  327  ls -lh /boot/initrd.img-6.12.101+deb13-arm64
+  328  sudo cpio -it < /boot/initrd.img-6.12.101+deb13-arm64 | grep -E '(^|/)(busybox|init)$' | head -30
+  329  sudo cpio -it < /boot/initrd.img-6.12.101+deb13-arm64 | head -30
+  330  cd ~/r3n-phone
+  331  ls -lh images/rootfs.img
+  332  ls -lh kernel/vmlinuz-6.12.101+deb13-arm64
+
 
