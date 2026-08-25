@@ -1,0 +1,52 @@
+sudo nano /tmp/r3n-initrd/init
+'''
+script'''
+#!/bin/busybox sh
+
+mount -t devtmpfs devtmpfs /dev
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+
+echo
+echo "=== r3n ARM64 initramfs ==="
+echo
+
+echo "Waiting for /dev/vda..."
+
+i=0
+while [ ! -b /dev/vda ] && [ $i -lt 50 ]; do
+    sleep 0.1
+    i=$((i + 1))
+done
+
+if [ ! -b /dev/vda ]; then
+    echo "ERROR: /dev/vda not found"
+    echo
+    echo "Available devices:"
+    ls -l /dev
+    exec /bin/sh
+fi
+
+echo "/dev/vda found"
+
+mkdir -p /newroot
+
+echo "Mounting root filesystem..."
+
+mount -t ext4 /dev/vda /newroot
+
+if [ $? -ne 0 ]; then
+    echo "ERROR: failed to mount /dev/vda"
+    exec /bin/sh
+fi
+
+echo "Root filesystem mounted."
+
+mount --move /dev /newroot/dev
+mount --move /proc /newroot/proc
+mount --move /sys /newroot/sys
+
+exec /bin/busybox switch_root /newroot /sbin/init
+
+echo "ERROR: switch_root failed"
+exec /bin/sh
