@@ -1,0 +1,7 @@
+# Ignore huge OS image directories and binaries
+images/
+kernel/vmlinuz*
+kernel/initrd*
+tmp/
+rootfs/
+initramfs/
