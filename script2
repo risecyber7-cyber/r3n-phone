@@ -1,0 +1,52 @@
+sudo nano /tmp/r3n-initrd/init
+'''
+script heres 
+''''
+
+
+
+#!/bin/busybox sh
+
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+echo "=== r3n init ==="
+echo "Mounting virtual filesystems..."
+
+mount -t devtmpfs devtmpfs /dev
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+
+echo "Waiting for root device..."
+
+sleep 2
+
+echo "Root devices:"
+ls -l /dev/vd*
+
+echo "Mounting rootfs..."
+
+mkdir -p /newroot
+
+mount -t ext4 /dev/vda /newroot
+
+if [ $? -ne 0 ]; then
+    echo "ERROR: Could not mount /dev/vda"
+    echo "Available block devices:"
+    ls -l /dev
+    echo "Dropping to emergency shell..."
+    exec /bin/busybox sh
+fi
+
+echo "Rootfs mounted successfully."
+
+mkdir -p /newroot/dev
+mkdir -p /newroot/proc
+mkdir -p /newroot/sys
+
+mount --move /dev /newroot/dev
+mount --move /proc /newroot/proc
+mount --move /sys /newroot/sys
+
+echo "Switching to real root..."
+
+exec /bin/busybox switch_root /newroot /sbin/init
